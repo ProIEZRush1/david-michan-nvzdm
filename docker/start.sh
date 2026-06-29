@@ -71,9 +71,17 @@ chmod -R ug+rwX storage bootstrap/cache "$DB_DIR" 2>/dev/null || true
     done
 ) &
 
-# 6. Clear (do NOT cache) config so each request reads the live exported APP_KEY — caching risks
-#    baking an empty key if the env wasn't ready at cache time, which 500s every route.
-php artisan config:clear || true
+# 6. CACHE the config so WEB requests read a single stable baked config. `php artisan serve` does NOT
+#    reliably resolve .env/$_ENV per request under its SAPI, so an un-cached web request silently fell
+#    back to the .env sqlite default (empty → "no such table: users") while the CLI used Postgres.
+#    This runs AFTER the env-sync (1b) and the APP_KEY export (2), so the cache bakes the real Postgres
+#    creds + a real APP_KEY (caching with an empty exported key is what used to 500 every route).
+#    Verify the baked key is non-empty; if anything went wrong, fall back to clearing so routes still load.
+php artisan config:cache 2>&1 | tail -1
+if [ "$(php artisan tinker --execute='echo strlen(config("app.key"));' 2>/dev/null | tail -1)" = "0" ]; then
+    echo "[entrypoint] baked APP_KEY empty — falling back to config:clear"
+    php artisan config:clear || true
+fi
 
 # 7. Serve under an auto-respawn loop: if a request ever crashes the dev server, it restarts
 #    immediately, so the app is never permanently down (no `set -e`, so the loop always continues).
