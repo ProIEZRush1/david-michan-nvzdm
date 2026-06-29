@@ -7,13 +7,14 @@ cd /app || exit 1
 # 1. Ensure a .env exists.
 [ -f .env ] || cp .env.production .env
 
-# 2. Ensure a valid APP_KEY and export it so request handlers read the baked
-#    key (overrides any empty injected env var).
-if ! grep -q "^APP_KEY=base64:" .env 2>/dev/null; then
+# 2. Ensure a valid APP_KEY and export it. Read the base64 line SPECIFICALLY (an empty
+#    `APP_KEY=` line from .env.production must never win) and generate one if absent.
+KEYLINE="$(grep '^APP_KEY=base64:' .env 2>/dev/null | head -1)"
+if [ -z "$KEYLINE" ]; then
     php artisan key:generate --force || true
+    KEYLINE="$(grep '^APP_KEY=base64:' .env 2>/dev/null | head -1)"
 fi
-APP_KEY="$(grep '^APP_KEY=' .env | head -1 | cut -d '=' -f2-)"
-export APP_KEY
+export APP_KEY="$(printf '%s' "$KEYLINE" | cut -d '=' -f2-)"
 
 # 3. Ensure the SQLite database file and its directory exist (default path).
 DB_DATABASE="${DB_DATABASE:-/app/database/database.sqlite}"
@@ -57,8 +58,9 @@ chmod -R ug+rwX storage bootstrap/cache "$DB_DIR" 2>/dev/null || true
     done
 ) &
 
-# 6. Cache config (uses the exported APP_KEY). Best effort.
-php artisan config:cache || true
+# 6. Clear (do NOT cache) config so each request reads the live exported APP_KEY — caching risks
+#    baking an empty key if the env wasn't ready at cache time, which 500s every route.
+php artisan config:clear || true
 
 # 7. Serve under an auto-respawn loop: if a request ever crashes the dev server, it restarts
 #    immediately, so the app is never permanently down (no `set -e`, so the loop always continues).
