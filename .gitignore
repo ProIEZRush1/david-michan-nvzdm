@@ -27,3 +27,6 @@ Thumbs.db
 /gateway/node_modules
 /storage/wa
 /gateway/.env
+
+/database/*.sqlite
+/database/*.sqlite-*
