@@ -37,9 +37,21 @@ for V in DB_CONNECTION DB_HOST DB_PORT DB_DATABASE DB_USERNAME DB_PASSWORD APP_U
 done
 
 # 2. Ensure a REAL base64 APP_KEY lives in .env (an empty APP_KEY makes config:cache bake app.key=''
-#    → 500 on every authenticated route). Try artisan first; if it didn't persist one (it has silently
-#    failed at boot), write one directly with /dev/urandom so this is bulletproof and never depends on
-#    a working bootstrap.
+#    → 500 on every authenticated route). PREFER a platform-injected $APP_KEY env var (Coolify) so the
+#    same key survives every redeploy/restart — otherwise sessions/cookies encrypted under the previous
+#    key silently fail to decrypt each time the container restarts. `php artisan key:generate --force`
+#    REFUSES to run whenever APP_KEY already exists as a process env var ("Unable to set application key.
+#    APP_KEY is already present in the environment"), so calling it unconditionally here would always
+#    fail on a real Coolify deploy and fall through to the urandom fallback, rotating the key on every
+#    restart — write the injected value into .env directly instead, and only generate/urandom when the
+#    platform truly gave us nothing.
+if printf '%s' "$APP_KEY" | grep -qE '^base64:.+'; then
+    if grep -qE '^APP_KEY=' .env; then
+        sed -i "s|^APP_KEY=.*|APP_KEY=${APP_KEY}|" .env
+    else
+        printf 'APP_KEY=%s\n' "$APP_KEY" >> .env
+    fi
+fi
 if ! grep -q '^APP_KEY=base64:' .env 2>/dev/null; then
     php artisan key:generate --force 2>&1 | tail -1 || true
 fi

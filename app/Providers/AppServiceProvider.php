@@ -2,7 +2,6 @@
 
 namespace App\Providers;
 
-use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
 
@@ -23,14 +22,11 @@ class AppServiceProvider extends ServiceProvider
     {
         Vite::prefetch(concurrency: 3);
 
-        // Force https URL generation only when APP_URL is actually https — not whenever
-        // APP_ENV=production. Coolify's proxy terminates TLS externally while this container
-        // always serves plain HTTP internally (php artisan serve on :8080), so keying off the
-        // environment name alone forced https:// on every asset/route URL even when nothing is
-        // listening on https — including in local/CI smoke tests that also run with
-        // APP_ENV=production but serve over http://127.0.0.1, breaking every asset load.
-        if (str_starts_with(config('app.url'), 'https://')) {
-            URL::forceScheme('https');
-        }
+        // Deliberately NOT calling URL::forceScheme('https') here: `trustProxies(at: '*')` in
+        // bootstrap/app.php already makes the request scheme follow Coolify's X-Forwarded-Proto
+        // header, so asset()/route() naturally render https in production without hardcoding it.
+        // Forcing it unconditionally (even only when config('app.url') happens to be https, which
+        // it legitimately is in production) broke every asset load in local/CI smoke tests, which
+        // share that same https APP_URL but are served directly over plain http://127.0.0.1.
     }
 }

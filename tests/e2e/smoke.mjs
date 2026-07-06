@@ -61,9 +61,12 @@ async function run() {
     await new Promise((resolve) => fakeGateway.listen(GATEWAY_PORT, '127.0.0.1', resolve));
     console.log(`Fake WhatsApp gateway listening on :${GATEWAY_PORT}`);
 
-    const browser = await chromium.launch(
-        process.env.SMOKE_CHROMIUM_PATH ? { executablePath: process.env.SMOKE_CHROMIUM_PATH } : {},
-    );
+    const browser = await chromium.launch({
+        ...(process.env.SMOKE_CHROMIUM_PATH ? { executablePath: process.env.SMOKE_CHROMIUM_PATH } : {}),
+        // --no-zygote/--disable-crash-reporter: some sandboxed CI hosts lack the ptrace/PID-namespace
+        // access Chromium's crashpad handler expects, which otherwise kills the browser on launch.
+        args: ['--no-zygote', '--disable-crash-reporter', '--disable-breakpad'],
+    });
     const page = await browser.newPage();
 
     try {
