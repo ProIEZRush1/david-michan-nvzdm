@@ -7,6 +7,18 @@ cd /app || exit 1
 # 1. Ensure a .env exists.
 [ -f .env ] || cp .env.production .env
 
+# 1a. CRITICAL: remove .env.production now that its content has seeded .env. Laravel's
+#     LoadEnvironmentVariables bootstrapper looks for a file literally named ".env.{APP_ENV}"
+#     BEFORE loading ".env", and Coolify sets APP_ENV=production in the container — so as long
+#     as .env.production exists on disk, EVERY artisan command and EVERY web request (migrate,
+#     config:cache, `php artisan serve`'s child process) loads .env.production INSTEAD of the
+#     .env this script carefully patches below, silently reintroducing the blank APP_KEY and
+#     sqlite-only DB_CONNECTION from the committed template. This is the actual root cause behind
+#     the repeated "APP_KEY empty" 500s despite every previous fix targeting .env — those fixes
+#     were all patching a file Laravel never reads once APP_ENV=production. Removing the file
+#     forces every subsequent bootstrap in this container's lifetime to fall back to .env.
+rm -f .env.production
+
 # 1b. Sync the injected runtime env (Postgres, URLs) INTO .env. `php artisan serve` runs under a
 #     php.ini whose variables_order may exclude 'E', so $_ENV is empty and Dotenv falls back to the
 #     .env defaults (DB_CONNECTION=sqlite) — making WEB requests hit an empty sqlite while the CLI uses
