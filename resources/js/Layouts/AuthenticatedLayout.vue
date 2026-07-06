@@ -9,17 +9,56 @@ const showingNavigationDropdown = ref(false);
 
 const page = usePage();
 
-const businessName = computed(() => page.props.name ?? 'Mi Negocio');
+const businessName = computed(() => page.props.name ?? 'David Michan');
 
 const brandInitials = computed(() => {
     const name = (businessName.value || '').trim();
-    if (!name) return 'MN';
+    if (!name) return 'DM';
     const parts = name.split(/\s+/).filter(Boolean);
     if (parts.length === 1) {
         return parts[0].substring(0, 2).toUpperCase();
     }
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 });
+
+const navItems = [
+    {
+        route: 'dashboard',
+        current: 'dashboard',
+        label: 'Inicio',
+        icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6',
+    },
+    {
+        route: 'planes.index',
+        current: 'planes.*',
+        label: 'Planes',
+        icon: 'M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z',
+    },
+    {
+        route: 'numeros.index',
+        current: 'numeros.*',
+        label: 'Inventario de números',
+        icon: 'M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z',
+    },
+    {
+        route: 'pedidos.index',
+        current: 'pedidos.*',
+        label: 'Pedidos',
+        icon: 'M9 2a1 1 0 00-1 1v1H6a2 2 0 00-2 2v13a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-2V3a1 1 0 00-1-1H9zM8 12h8m-8 4h5',
+    },
+    {
+        route: 'clientes.index',
+        current: 'clientes.*',
+        label: 'Clientes',
+        icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z',
+    },
+    {
+        route: 'conectar',
+        current: 'conectar',
+        label: 'Conectar WhatsApp',
+        icon: 'M3 20l1.3-3.9A8 8 0 1 1 7.9 19.7L3 20z',
+    },
+];
 
 const userName = computed(() => page.props.auth?.user?.name ?? '');
 const userEmail = computed(() => page.props.auth?.user?.email ?? '');
@@ -48,12 +87,12 @@ const userInitials = computed(() => {
                     class="flex items-center gap-3"
                 >
                     <span
-                        class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#7c3aed] to-[#c026d3] text-sm font-bold text-white shadow-lg shadow-fuchsia-500/20"
+                        class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#1d4ed8] to-[#0891b2] text-sm font-bold text-white shadow-lg shadow-cyan-500/20"
                     >
                         {{ brandInitials }}
                     </span>
                     <span
-                        class="bg-gradient-to-r from-[#7c3aed] to-[#c026d3] bg-clip-text text-lg font-extrabold leading-tight tracking-tight text-transparent"
+                        class="bg-gradient-to-r from-[#1d4ed8] to-[#0891b2] bg-clip-text text-lg font-extrabold leading-tight tracking-tight text-transparent"
                     >
                         {{ businessName }}
                     </span>
@@ -63,16 +102,18 @@ const userInitials = computed(() => {
             <!-- Nav -->
             <nav class="flex-1 space-y-1 px-4 py-4">
                 <Link
-                    :href="route('dashboard')"
+                    v-for="item in navItems"
+                    :key="item.route"
+                    :href="route(item.route)"
                     :class="[
                         'flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition',
-                        route().current('dashboard')
-                            ? 'bg-gradient-to-r from-[#7c3aed] to-[#c026d3] text-white shadow-md shadow-fuchsia-500/20'
+                        route().current(item.current)
+                            ? 'bg-gradient-to-r from-[#1d4ed8] to-[#0891b2] text-white shadow-md shadow-cyan-500/20'
                             : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                     ]"
                 >
                     <svg
-                        class="h-5 w-5"
+                        class="h-5 w-5 shrink-0"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -81,36 +122,11 @@ const userInitials = computed(() => {
                         <path
                             stroke-linecap="round"
                             stroke-linejoin="round"
-                            d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+                            :d="item.icon"
                         />
                     </svg>
-                    Inicio
+                    {{ item.label }}
                 </Link>
-                <Link
-                    :href="route('conectar')"
-                    :class="[
-                        'flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition',
-                        route().current('conectar')
-                            ? 'bg-gradient-to-r from-[#7c3aed] to-[#c026d3] text-white shadow-md shadow-fuchsia-500/20'
-                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-                    ]"
-                >
-                    <svg
-                        class="h-5 w-5"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        stroke-width="1.8"
-                    >
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            d="M3 20l1.3-3.9A8 8 0 1 1 7.9 19.7L3 20z"
-                        />
-                    </svg>
-                    Conectar WhatsApp
-                </Link>
-                <!-- El menú se amplía por cliente según los módulos instalados. -->
             </nav>
 
             <!-- Footer credit -->
@@ -153,12 +169,12 @@ const userInitials = computed(() => {
                     </button>
                     <Link :href="route('dashboard')" class="flex items-center gap-2">
                         <span
-                            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[#7c3aed] to-[#c026d3] text-xs font-bold text-white"
+                            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[#1d4ed8] to-[#0891b2] text-xs font-bold text-white"
                         >
                             {{ brandInitials }}
                         </span>
                         <span
-                            class="bg-gradient-to-r from-[#7c3aed] to-[#c026d3] bg-clip-text text-base font-extrabold text-transparent"
+                            class="bg-gradient-to-r from-[#1d4ed8] to-[#0891b2] bg-clip-text text-base font-extrabold text-transparent"
                         >
                             {{ businessName }}
                         </span>
@@ -179,7 +195,7 @@ const userInitials = computed(() => {
                                 class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white py-1 pl-1 pr-3 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900 focus:outline-none"
                             >
                                 <span
-                                    class="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#7c3aed] to-[#c026d3] text-xs font-bold text-white"
+                                    class="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#1d4ed8] to-[#0891b2] text-xs font-bold text-white"
                                 >
                                     {{ userInitials }}
                                 </span>
@@ -222,16 +238,12 @@ const userInitials = computed(() => {
             >
                 <div class="space-y-1 px-4 py-3">
                     <ResponsiveNavLink
-                        :href="route('dashboard')"
-                        :active="route().current('dashboard')"
+                        v-for="item in navItems"
+                        :key="item.route"
+                        :href="route(item.route)"
+                        :active="route().current(item.current)"
                     >
-                        Inicio
-                    </ResponsiveNavLink>
-                    <ResponsiveNavLink
-                        :href="route('conectar')"
-                        :active="route().current('conectar')"
-                    >
-                        Conectar WhatsApp
+                        {{ item.label }}
                     </ResponsiveNavLink>
                 </div>
                 <div class="border-t border-slate-200 px-4 py-4">

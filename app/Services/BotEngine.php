@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\BotContact;
 use App\Models\Cliente;
+use App\Models\Numero;
 use App\Models\Pedido;
 use App\Models\Plan;
 use Illuminate\Support\Collection;
@@ -14,6 +15,11 @@ use Illuminate\Support\Str;
  *
  * It is a finite-state machine keyed on BotContact->step:
  *   new → choosing → confirming → done   (+ the cross-cutting "human" handoff state)
+ *
+ * Frequently-asked questions are answered from ANY step without disturbing the funnel
+ * (see `matchFaq`/`answerFaq`), and confirming an order automatically assigns an
+ * available phone number from inventory (see `assignNumero`) and reports it back to
+ * the customer in the same reply — closing the sale end-to-end inside the chat.
  *
  * Unlike the panel's BotResponder (the STYLE reference for tone, `isYes`, `wantsHuman`
  * and single-asterisk WhatsApp bold) this engine calls NO AI/LLM — every reply is fixed
@@ -54,6 +60,14 @@ class BotEngine
 
         // A human has taken over this chat → the bot stays completely silent.
         if ($contact->step === self::STEP_HUMAN) {
+            return;
+        }
+
+        // FAQ (any step): answer without disturbing wherever the customer is in the funnel.
+        $faq = $this->matchFaq($normalized);
+        if ($faq !== null) {
+            $this->reply($from, $faq);
+
             return;
         }
 
@@ -120,22 +134,25 @@ class BotEngine
         $this->reply($from, $this->copyConfirmPrompt($plan));
     }
 
-    /** Affirmative → confirm the Pedido and capture the buyer; negative → back to choosing. */
+    /** Affirmative → confirm the Pedido, capture the buyer and assign a number; negative → back to choosing. */
     private function onConfirming(BotContact $contact, string $from, ?string $fromName, string $text): void
     {
         if ($this->isYes($text)) {
             $pedido = $this->pendingPedido($contact);
-            if ($pedido) {
-                $pedido->update(['estado' => 'confirmado']);
-            }
 
-            Cliente::updateOrCreate(
+            $cliente = Cliente::updateOrCreate(
                 ['telefono' => $from],
                 ['nombre' => $fromName ?: $contact->name],
             );
 
+            if ($pedido) {
+                $pedido->update(['estado' => 'confirmado', 'cliente_id' => $cliente->id]);
+            }
+
+            $numero = $this->assignNumero($pedido);
+
             $this->setStep($contact, self::STEP_DONE);
-            $this->reply($from, $this->copyConfirmed());
+            $this->reply($from, $this->copyConfirmed($numero));
 
             return;
         }
@@ -158,7 +175,7 @@ class BotEngine
         $this->reply($from, $this->copyAlreadyDone());
     }
 
-    // ---- plan helpers ---------------------------------------------------
+    // ---- plan / número helpers -------------------------------------------
 
     /** @return Collection<int,Plan> */
     private function activePlans(): Collection
@@ -200,14 +217,100 @@ class BotEngine
             ?? $contact->pedidos()->where('estado', 'nuevo')->latest('id')->first();
     }
 
+    /** Take the next available number from inventory and hand it to the confirmed Pedido. */
+    private function assignNumero(?Pedido $pedido): ?Numero
+    {
+        if (! $pedido) {
+            return null;
+        }
+
+        $numero = Numero::where('estado', 'disponible')->orderBy('id')->first();
+        if (! $numero) {
+            return null;
+        }
+
+        $numero->update(['estado' => 'asignado', 'pedido_id' => $pedido->id]);
+        $pedido->update(['estado' => 'numero_asignado']);
+
+        return $numero;
+    }
+
+    // ---- FAQ (any step, does not disturb the funnel) ---------------------
+
+    /** @return string|null the FAQ reply, or null if the text doesn't match a known question. */
+    private function matchFaq(string $text): ?string
+    {
+        $faqs = [
+            '/\b(cobertura|zona|ciudades?|donde (tienen|hay) servicio|llega (la señal|el servicio))\b/u' => $this->faqCobertura(),
+            '/\b(portabilidad|portar (mi )?(numero|línea|linea)|conservar (mi )?(numero|línea|linea)|mantener (mi )?(numero|línea|linea))\b/u' => $this->faqPortabilidad(),
+            '/\b(precio|precios|cuesta|cuestan|cu[aá]nto (vale|cuesta|es)|tarifa|planes? (y )?precios?)\b/u' => $this->faqPrecios(),
+            '/\b(activaci[oó]n|cuando (se activa|queda activo|puedo usarlo)|tiempo de activaci[oó]n|cuanto tarda en activarse)\b/u' => $this->faqActivacion(),
+            '/\b(cuanto tardan en (enviar|entregar|mandar)|tiempo de entrega|cuando (me llega|llega mi numero))\b/u' => $this->faqEntrega(),
+            '/\b(que necesito|requisitos|documentos? (necesarios|para)|papeles? (necesarios|para))\b/u' => $this->faqRequisitos(),
+        ];
+
+        foreach ($faqs as $pattern => $answer) {
+            if (preg_match($pattern, $text)) {
+                return $answer;
+            }
+        }
+
+        return null;
+    }
+
+    private function faqCobertura(): string
+    {
+        return '📶 Tenemos cobertura a nivel nacional gracias a la red con la que trabajamos, con la misma calidad de señal '
+            ."que ya conoces.\n\n".$this->copyFaqFooter();
+    }
+
+    private function faqPortabilidad(): string
+    {
+        return '🔁 ¡Claro! Puedes *conservar tu número actual* (portabilidad) o estrenar uno nuevo de nuestro inventario, '
+            ."tú decides. La portabilidad no tiene costo extra y la gestionamos por ti.\n\n".$this->copyFaqFooter();
+    }
+
+    private function faqPrecios(): string
+    {
+        $plans = $this->activePlans();
+        if ($plans->isEmpty()) {
+            return '💰 En un momento un asesor te comparte los precios vigentes.';
+        }
+
+        return "💰 Estos son nuestros planes y precios vigentes:\n\n".$this->planList($plans)."\n\n".$this->copyAskChoice();
+    }
+
+    private function faqActivacion(): string
+    {
+        return '⚡ La activación es prácticamente inmediata: en cuanto confirmas tu pedido te asignamos tu número '
+            ."y puedes empezar a usarlo. Si es portabilidad, puede tardar hasta 24 horas.\n\n".$this->copyFaqFooter();
+    }
+
+    private function faqEntrega(): string
+    {
+        return '📦 En cuanto confirmas tu pedido, tu número queda asignado y te lo comparto aquí mismo por WhatsApp, '
+            ."no hay espera de envío físico.\n\n".$this->copyFaqFooter();
+    }
+
+    private function faqRequisitos(): string
+    {
+        return '📝 Solo necesitamos tu nombre y, si vas a portar tu número actual, tenerlo a la mano. '
+            ."¡Así de sencillo!\n\n".$this->copyFaqFooter();
+    }
+
+    private function copyFaqFooter(): string
+    {
+        return '¿Seguimos con tu pedido? Escribe *menu* para ver los planes disponibles. 😊';
+    }
+
     // ---- copy (editable Spanish strings) --------------------------------
 
     private function copyGreeting(?string $name): string
     {
         $greeting = $name ? "¡Hola, {$name}! 👋" : '¡Hola! 👋';
 
-        return $greeting." Gracias por escribir a *".config('app.name')."* 🙌\n\n"
-            ."Estos son nuestros planes:\n\n";
+        return $greeting." Gracias por escribir a *".config('app.name')."* 📱\n\n"
+            ."Estos son nuestros planes de línea telefónica:\n\n";
     }
 
     private function planList(Collection $plans): string
@@ -250,10 +353,17 @@ class BotEngine
         return "Sin problema. 🙌 Aquí están los planes de nuevo:\n\n";
     }
 
-    private function copyConfirmed(): string
+    private function copyConfirmed(?Numero $numero): string
     {
-        return "¡Listo! ✅ Registramos tu pedido. Un asesor te contactará en breve para los siguientes pasos. 🙌\n\n"
-            ."Si quieres empezar de nuevo, escribe *menu*.";
+        if ($numero) {
+            return "¡Listo! ✅ Registramos tu pedido y ya tenemos tu nueva línea.\n\n"
+                .'📲 Tu número asignado es: *'.$numero->numero."*\n\n"
+                ."En breve un asesor te contacta para terminar la activación (o la portabilidad, si aplica). 🙌\n\n"
+                .'Si quieres empezar de nuevo, escribe *menu*.';
+        }
+
+        return "¡Listo! ✅ Registramos tu pedido. Estamos por asignarte tu número y un asesor te contactará en breve. 🙌\n\n"
+            .'Si quieres empezar de nuevo, escribe *menu*.';
     }
 
     private function copyAlreadyDone(): string

@@ -1,5 +1,9 @@
 <?php
 
+use App\Http\Controllers\ClienteController;
+use App\Http\Controllers\NumeroController;
+use App\Http\Controllers\PedidoController;
+use App\Http\Controllers\PlanController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\WhatsAppController;
 use Illuminate\Foundation\Application;
@@ -25,6 +29,11 @@ Route::get('/dashboard', function () {
 
 Route::middleware('auth')->group(function () {
     Route::get('/conectar', [WhatsAppController::class, 'conectar'])->name('conectar');
+
+    Route::resource('planes', PlanController::class)->parameters(['planes' => 'plan'])->except('show');
+    Route::resource('numeros', NumeroController::class)->parameters(['numeros' => 'numero'])->except('show');
+    Route::resource('pedidos', PedidoController::class)->parameters(['pedidos' => 'pedido'])->except('show');
+    Route::resource('clientes', ClienteController::class)->parameters(['clientes' => 'cliente'])->except('show');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');

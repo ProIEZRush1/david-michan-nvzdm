@@ -62,7 +62,7 @@ onUnmounted(() => {
             >
                 <!-- Cabecera con gradiente de marca -->
                 <div
-                    class="bg-gradient-to-r from-[#7c3aed] to-[#c026d3] px-6 py-5 text-white"
+                    class="bg-gradient-to-r from-[#1d4ed8] to-[#0891b2] px-6 py-5 text-white"
                 >
                     <div class="flex items-center gap-3">
                         <span
@@ -168,7 +168,7 @@ onUnmounted(() => {
                         class="flex flex-col items-center py-10 text-center"
                     >
                         <svg
-                            class="h-12 w-12 animate-spin text-[#7c3aed]"
+                            class="h-12 w-12 animate-spin text-[#1d4ed8]"
                             fill="none"
                             viewBox="0 0 24 24"
                         >
