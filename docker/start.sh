@@ -7,11 +7,15 @@ cd /app || exit 1
 # 1. Ensure a .env exists.
 [ -f .env ] || cp .env.production .env
 
-# 1b. Sync the injected runtime env (Postgres, URLs, name) INTO .env. `php artisan serve` runs under a
+# 1b. Sync the injected runtime env (Postgres, URLs) INTO .env. `php artisan serve` runs under a
 #     php.ini whose variables_order may exclude 'E', so $_ENV is empty and Dotenv falls back to the
 #     .env defaults (DB_CONNECTION=sqlite) — making WEB requests hit an empty sqlite while the CLI uses
 #     the real Postgres. Writing the real values into .env makes both agree.
-for V in DB_CONNECTION DB_HOST DB_PORT DB_DATABASE DB_USERNAME DB_PASSWORD APP_URL ASSET_URL APP_NAME APP_ENV; do
+#     Deliberately EXCLUDES APP_NAME: the platform injects a generic APP_NAME (its own project
+#     default) into every deployed container, which would clobber this client's branded
+#     APP_NAME="David Michan" from .env.production. The business name must always come from the
+#     committed .env, never from the shared deploy environment.
+for V in DB_CONNECTION DB_HOST DB_PORT DB_DATABASE DB_USERNAME DB_PASSWORD APP_URL ASSET_URL APP_ENV; do
     eval "VAL=\${$V}"
     [ -n "$VAL" ] || continue
     if grep -q "^$V=" .env; then

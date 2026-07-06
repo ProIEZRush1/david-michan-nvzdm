@@ -13,7 +13,12 @@ return [
     |
     */
 
-    'name' => env('APP_NAME', 'David Michan'),
+    // Hardcoded, NOT env('APP_NAME', ...): the deploy platform injects its own generic
+    // APP_NAME (e.g. "Overcloud") into every client container, which would otherwise win over
+    // whatever .env sets since Dotenv never overwrites an already-present OS env var. This is a
+    // single-tenant app built exclusively for David Michan, so the business name must never
+    // depend on shared infrastructure env vars.
+    'name' => 'David Michan',
 
     /*
     |--------------------------------------------------------------------------

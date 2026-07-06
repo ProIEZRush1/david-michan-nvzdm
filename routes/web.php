@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ClienteController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\NumeroController;
 use App\Http\Controllers\PedidoController;
 use App\Http\Controllers\PlanController;
@@ -8,7 +9,6 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\WhatsAppController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
-use Inertia\Inertia;
 
 // Admin/bot panel: the root goes straight to the panel (login if needed), never a generic page.
 Route::get('/', fn () => redirect()->route('dashboard'));
@@ -23,9 +23,7 @@ Route::get('/health', function () {
     }
 });
 
-Route::get('/dashboard', function () {
-    return Inertia::render('Dashboard');
-})->middleware(['auth', 'verified'])->name('dashboard');
+Route::get('/dashboard', DashboardController::class)->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::middleware('auth')->group(function () {
     Route::get('/conectar', [WhatsAppController::class, 'conectar'])->name('conectar');
